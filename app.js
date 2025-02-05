@@ -6,6 +6,7 @@ const passport = require('passport')
 const session = require('express-session')
 const MongoStore = require('connect-mongo')
 const trendingRoutes = require('./routes/trending')
+const googleTrendsRoutes = require('./routes/googleTrends')
 
 // Import cron service
 require('./cronjob')
@@ -61,6 +62,7 @@ mongoose
 // Routes (to be implemented)
 app.use('/auth', require('./routes/auth'))
 app.use('/api', trendingRoutes)
+app.use('/api', googleTrendsRoutes)
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack)
