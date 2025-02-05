@@ -35,7 +35,7 @@ exports.register = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, email: user.email },
+      { userId: user._id, email: user.email, isPaidUser: user.isPaidUser },
       JWT_SECRET,
       { expiresIn: '24h' }
     )
@@ -75,11 +75,12 @@ exports.login = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, email: user.email },
+      { userId: user._id, email: user.email, isPaidUser: user.isPaidUser },
       JWT_SECRET,
       { expiresIn: '24h' }
     )
 
+    // console.log(token)
     res.json({
       message: 'Login successful',
       token,
@@ -93,7 +94,6 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: 'Error logging in', error: error.message })
   }
 }
-
 
 // Get current user
 exports.getCurrentUser = async (req, res) => {
@@ -113,25 +113,76 @@ exports.getCurrentUser = async (req, res) => {
 // Update user profile
 exports.updateProfile = async (req, res) => {
   try {
-    const { email, password } = req.body
+    const { email, password, name, phone, preferences } = req.body
     const user = await User.findById(req.user.userId)
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' })
     }
 
-    if (email) user.email = email
+    // Check if email is being changed and if it's already in use
+    if (email && email !== user.email) {
+      const emailExists = await User.findOne({ email })
+      if (emailExists) {
+        return res.status(400).json({ message: 'Email already in use' })
+      }
+      user.email = email
+    }
+
+    // Update other fields if provided
+    if (name) user.name = name
+    if (phone) user.phone = phone
+    if (preferences) {
+      user.preferences = {
+        ...user.preferences,
+        ...preferences,
+      }
+    }
+
+    // Update password if provided
     if (password) {
       const salt = await bcryptjs.genSalt(10)
       user.password = await bcryptjs.hash(password, salt)
     }
 
     await user.save()
-    res.json({ message: 'Profile updated successfully', user })
+
+    // Return user without password
+    const userResponse = user.toObject()
+    delete userResponse.password
+
+    res.json({ message: 'Profile updated successfully', user: userResponse })
   } catch (error) {
     res
       .status(500)
       .json({ message: 'Error updating profile', error: error.message })
+  }
+}
+
+// Delete user account
+exports.deleteAccount = async (req, res) => {
+  try {
+    const { password } = req.body
+    const user = await User.findById(req.user.userId)
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    // Verify password before deletion (skip for Google OAuth users)
+    if (user.password) {
+      const isValidPassword = await bcryptjs.compare(password, user.password)
+      if (!isValidPassword) {
+        return res.status(401).json({ message: 'Invalid password' })
+      }
+    }
+
+    await User.findByIdAndDelete(user._id)
+    res.json({ message: 'Account deleted successfully' })
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: 'Error deleting account', error: error.message })
   }
 }
 
@@ -145,18 +196,36 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        let user = await User.findOne({ email: profile.emails[0].value })
-        if (!user) {
-          user = new User({
-            email: profile.emails[0].value,
-            password: null,
-            preferences: {
-              notificationMethods: ['email'],
-              currency: 'USD',
-            },
-          })
+        let user = await User.findOne({
+          $or: [{ email: profile.emails[0].value }, { googleId: profile.id }],
+        })
+
+        if (user) {
+          // Update existing user's Google-specific info
+          user.googleId = profile.id
+          user.name = user.name || profile.displayName
+          user.avatar = user.avatar || profile.photos[0]?.value
+          user.lastLogin = new Date()
           await user.save()
+          return done(null, user)
         }
+
+        // Create new user
+        user = new User({
+          email: profile.emails[0].value,
+          googleId: profile.id,
+          name: profile.displayName,
+          avatar: profile.photos[0]?.value,
+          password: null,
+          preferences: {
+            notificationMethods: ['email'],
+            currency: 'USD',
+            timezone: 'UTC',
+          },
+          lastLogin: new Date(),
+        })
+
+        await user.save()
         return done(null, user)
       } catch (error) {
         return done(error, null)
