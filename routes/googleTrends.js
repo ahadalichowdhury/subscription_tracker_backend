@@ -168,7 +168,7 @@ router.get('/trends', auth, async (req, res) => {
     }
 
     // Limit results based on user subscription
-    const limitedTrends = req.user.isPaidUser ? trends : trends.slice(0, 5)
+    const limitedTrends = req.user.isPaidUser ? trends : trends.slice(0, 2)
 
     res.json({
       success: true,
@@ -220,7 +220,7 @@ router.get('/trends/combined', auth, async (req, res) => {
     // Limit results based on user subscription
     const limitedResults = req.user.isPaidUser
       ? combinedTrends
-      : combinedTrends.slice(0, 5)
+      : combinedTrends.slice(0, 2)
 
     res.json({
       success: true,

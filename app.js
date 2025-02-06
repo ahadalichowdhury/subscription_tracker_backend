@@ -7,7 +7,9 @@ const session = require('express-session')
 const MongoStore = require('connect-mongo')
 const trendingRoutes = require('./routes/trending')
 const googleTrendsRoutes = require('./routes/googleTrends')
-
+const videoIdeasRoutes = require('./routes/videoIdeas')
+const videoScriptsRoutes = require('./routes/videoScripts')
+const analytics = require('./routes/analytics')
 // Import cron service
 require('./cronjob')
 
@@ -59,10 +61,14 @@ mongoose
     console.error('MongoDB connection error:', err)
   })
 
-// Routes (to be implemented)
+// Routes
 app.use('/auth', require('./routes/auth'))
 app.use('/api', trendingRoutes)
 app.use('/api', googleTrendsRoutes)
+app.use('/api', videoIdeasRoutes) // Add the new video ideas routes
+app.use('/api', videoScriptsRoutes) // Add the video scripts routes
+app.use('/api/analytics', analytics)
+app.use('/api', require('./routes/keywords')) // Add the keyword analysis routes
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack)
